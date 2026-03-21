@@ -1,4 +1,4 @@
-blank_issues_enabled: false # 核心！这会彻底禁用“提交空白 Issue”的按钮
+blank_issues_enabled: true # 核心！这会彻底禁用“提交空白 Issue”的按钮
 contact_links:
   - name: 💡 提问或建议请前往 Discussions
     url: https://github.com/VTB-LINK/Metabox-Nexus-WesingCap/discussions/new/choose
