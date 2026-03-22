@@ -5,6 +5,8 @@ import (
 	"Metabox-Nexus-WesingCap/lyric"
 	"Metabox-Nexus-WesingCap/proc"
 	"Metabox-Nexus-WesingCap/ws"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -491,8 +493,9 @@ type releaseInfo struct {
 	GlobalCDN string `json:"global_cdn_download_url_prefix"`
 	ChinaCDN  string `json:"china_cdn_download_url_prefix"`
 	Assets    []struct {
-		Name string `json:"name"`
-		Size int64  `json:"size"`
+		Name   string `json:"name"`
+		Size   int64  `json:"size"`
+		Digest string `json:"digest"` // SHA256 摘要，格式: "sha256:xxxxx"
 	} `json:"assets"`
 }
 
@@ -553,15 +556,17 @@ func checkAndUpdate() {
 
 	// exe 优先排序：确保可执行文件最先下载
 	sortedAssets := make([]struct {
-		Name string `json:"name"`
-		Size int64  `json:"size"`
+		Name   string `json:"name"`
+		Size   int64  `json:"size"`
+		Digest string `json:"digest"`
 	}, 0, len(release.Assets))
 	var exeTestFile string
 	for _, a := range release.Assets {
 		if strings.HasSuffix(strings.ToLower(a.Name), ".exe") {
 			sortedAssets = append([]struct {
-				Name string `json:"name"`
-				Size int64  `json:"size"`
+				Name   string `json:"name"`
+				Size   int64  `json:"size"`
+				Digest string `json:"digest"`
 			}{a}, sortedAssets...)
 			exeTestFile = a.Name
 		} else {
@@ -595,8 +600,9 @@ func checkAndUpdate() {
 
 // performUpdateAll 下载所有发布资源并替换/放置到程序目录
 func performUpdateAll(cdnPrefix, tagName string, assets []struct {
-	Name string `json:"name"`
-	Size int64  `json:"size"`
+	Name   string `json:"name"`
+	Size   int64  `json:"size"`
+	Digest string `json:"digest"`
 }) error {
 	exePath, err := os.Executable()
 	if err != nil {
@@ -617,7 +623,7 @@ func performUpdateAll(cdnPrefix, tagName string, assets []struct {
 
 		// 下载到临时文件
 		tmpPath := targetPath + ".new"
-		if err := downloadFile(client, downloadURL, tmpPath, asset.Size); err != nil {
+		if err := downloadFile(client, downloadURL, tmpPath, asset.Size, asset.Digest); err != nil {
 			return fmt.Errorf("下载 %s 失败: %v", asset.Name, err)
 		}
 
@@ -649,7 +655,7 @@ func performUpdateAll(cdnPrefix, tagName string, assets []struct {
 }
 
 // downloadFile 下载文件到指定路径（带进度显示）
-func downloadFile(client *http.Client, url, destPath string, expectedSize int64) error {
+func downloadFile(client *http.Client, url, destPath string, expectedSize int64, expectedDigest string) error {
 	resp, err := client.Get(url)
 	if err != nil {
 		return fmt.Errorf("连接失败: %v", err)
@@ -670,15 +676,28 @@ func downloadFile(client *http.Client, url, destPath string, expectedSize int64)
 		return fmt.Errorf("创建文件失败: %v", err)
 	}
 
+	// 创建哈希计算器和进度显示写入器
+	hasher := sha256.New()
 	pr := &progressWriter{total: totalSize}
-	written, err := io.Copy(out, io.TeeReader(resp.Body, pr))
+	written, err := io.Copy(out, io.TeeReader(resp.Body, io.MultiWriter(hasher, pr)))
 	out.Sync()
 	out.Close()
 	if err != nil {
 		os.Remove(destPath)
 		return fmt.Errorf("下载中断: %v", err)
 	}
-	fmt.Printf("\n[✓] 下载完成 (%.1f MB)\n", float64(written)/1024/1024)
+
+	// 验证 SHA256
+	if expectedDigest != "" {
+		actualHash := "sha256:" + hex.EncodeToString(hasher.Sum(nil))
+		if actualHash != expectedDigest {
+			os.Remove(destPath)
+			return fmt.Errorf("SHA256 验证失败: 期望 %s，实际 %s", expectedDigest, actualHash)
+		}
+		fmt.Printf("\n[✓] SHA256 验证成功\n")
+	}
+
+	fmt.Printf("[✓] 下载完成 (%.1f MB)\n", float64(written)/1024/1024)
 	return nil
 }
 
