@@ -14,7 +14,8 @@ jobs:
     environment: source-sync-production
     env:
       TAG_NAME: ${{ github.ref_name }}
-      TARGET_REPO: VTB-LINK/Metabox-Nexus-WesingCap
+      TARGET_REPO_OWNER: VTB-LINK
+      TARGET_REPO_NAME: Metabox-Nexus-WesingCap
       TARGET_BRANCH: main
       GIT_AUTHOR_NAME: github-actions[bot]
       GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
@@ -37,6 +38,8 @@ jobs:
             echo "::error::Missing secret GH_DOTCOM_TOKEN"
             exit 1
           fi
+
+          TARGET_REPO="${TARGET_REPO_OWNER}/${TARGET_REPO_NAME}"
 
           SNAPSHOT_DIR="$(mktemp -d)"
           TARGET_DIR="$(mktemp -d)"

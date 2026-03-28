@@ -16,6 +16,12 @@ jobs:
       GOOS: windows
       GOARCH: amd64
       OUTPUT_NAME: Metabox-Nexus-WesingCap
+      DOTCOM_ARCHIVE_NAME: Metabox-Nexus-WesingCap.zip
+      DOTCOM_OWNER: VTB-LINK
+      DOTCOM_REPO_NAME: Metabox-Nexus-WesingCap
+      DOTCOM_GITHUB_BASE: https://github.com
+      DOWNLOAD_PROXY_PREFIX: https://github.boki.moe
+      HTML_FILE_NAME: lyric_display.html
       GH_HOST: github.com
       GH_TOKEN: ${{ secrets.GH_DOTCOM_TOKEN }}
 
@@ -59,7 +65,7 @@ jobs:
           VERSION=${{ steps.vars.outputs.VERSION }}
           TAG_NAME=${{ steps.vars.outputs.TAG_NAME }}
 
-          # 输出文件名带版本号：Metabox-Nexus-WesingCap-Vx.y.z.exe
+          # 输出文件名保持固定名（由 job env.OUTPUT_NAME 控制）
           # EXE_NAME="${OUTPUT_NAME}-V${VERSION}.exe"
           EXE_NAME="${OUTPUT_NAME}.exe"
           echo "EXE_NAME=${EXE_NAME}" >> $GITHUB_ENV
@@ -83,7 +89,7 @@ jobs:
 
           cp "${EXE_NAME}" "${PACKAGE_DIR}/"
           cp config.yml "${PACKAGE_DIR}/"
-          cp lyric_display.html "${PACKAGE_DIR}/"
+          cp "${HTML_FILE_NAME}" "${PACKAGE_DIR}/"
           cp doc/API_RESPONSE_EXAMPLES.md "${PACKAGE_DIR}/"
           cp README.md "${PACKAGE_DIR}/" 2>/dev/null || true
 
@@ -120,20 +126,27 @@ jobs:
             ${{ env.OUTPUT_NAME }}.exe
             # ${{ env.OUTPUT_NAME }}-V${{ steps.vars.outputs.VERSION }}.exe
 
-      - name: Create Release Draft (VTB-LINK on github.com)
+      - name: Create Release Draft (dotcom mirror)
         run: |
           TAG_NAME=${{ steps.vars.outputs.TAG_NAME }}
-          DOWNLOAD_PROXY_BASE="https://github.boki.moe/https://github.com/VTB-LINK/Metabox-Nexus-WesingCap/releases/download"
-          LATEST_DOWNLOAD_PROXY_BASE="https://github.boki.moe/https://github.com/VTB-LINK/Metabox-Nexus-WesingCap/releases/latest/download"
+          DOTCOM_REPO="${DOTCOM_OWNER}/${DOTCOM_REPO_NAME}"
+          DOTCOM_REPO_BASE_URL="${DOTCOM_GITHUB_BASE}/${DOTCOM_REPO}"
+          DOWNLOAD_PROXY_BASE="${DOWNLOAD_PROXY_PREFIX}/${DOTCOM_REPO_BASE_URL}/releases/download"
+          LATEST_DOWNLOAD_PROXY_BASE="${DOWNLOAD_PROXY_PREFIX}/${DOTCOM_REPO_BASE_URL}/releases/latest/download"
+          DOTCOM_DISCUSSIONS_URL="${DOTCOM_REPO_BASE_URL}/discussions"
+
+          # 生成 github.com 发布用压缩包（仅 exe + html）
+          rm -f "${DOTCOM_ARCHIVE_NAME}"
+          zip -j "${DOTCOM_ARCHIVE_NAME}" "${EXE_NAME}" "${HTML_FILE_NAME}"
 
           # 尝试创建 tag（若远程仓库尚无此 tag，需先在该仓库创建）
-          gh api "repos/VTB-LINK/Metabox-Nexus-WesingCap/git/refs" \
+          gh api "repos/${DOTCOM_REPO}/git/refs" \
             --method POST \
             -f ref="refs/tags/${TAG_NAME}" \
             -f sha="$(git rev-parse HEAD)" 2>/dev/null || true
 
           # 生成自动 release notes
-          gh api "repos/VTB-LINK/Metabox-Nexus-WesingCap/releases/generate-notes" \
+          gh api "repos/${DOTCOM_REPO}/releases/generate-notes" \
             --method POST \
             -f tag_name="${TAG_NAME}" \
             --jq '.body' > auto-release-notes.md
@@ -144,12 +157,13 @@ jobs:
 
           | 文件 | 最新版 | 当前版本 |
           | --- | --- | --- |
-          | Metabox-Nexus-WesingCap.exe | [下载](${LATEST_DOWNLOAD_PROXY_BASE}/Metabox-Nexus-WesingCap.exe) | [下载](${DOWNLOAD_PROXY_BASE}/${TAG_NAME}/Metabox-Nexus-WesingCap.exe) |
-          | lyric_display.html | [下载](${LATEST_DOWNLOAD_PROXY_BASE}/lyric_display.html) | [下载](${DOWNLOAD_PROXY_BASE}/${TAG_NAME}/lyric_display.html) |
+          | ${DOTCOM_ARCHIVE_NAME} | [下载](${LATEST_DOWNLOAD_PROXY_BASE}/${DOTCOM_ARCHIVE_NAME}) | [下载](${DOWNLOAD_PROXY_BASE}/${TAG_NAME}/${DOTCOM_ARCHIVE_NAME}) |
+          | ${EXE_NAME} | [下载](${LATEST_DOWNLOAD_PROXY_BASE}/${EXE_NAME}) | [下载](${DOWNLOAD_PROXY_BASE}/${TAG_NAME}/${EXE_NAME}) |
+          | ${HTML_FILE_NAME} | [下载](${LATEST_DOWNLOAD_PROXY_BASE}/${HTML_FILE_NAME}) | [下载](${DOWNLOAD_PROXY_BASE}/${TAG_NAME}/${HTML_FILE_NAME}) |
 
           ### 发布说明
           - 感谢您使用VTB-TOOLS Metabox Nexus WesingCap！这是一个专为K歌爱好者设计的工具，旨在提升您的K歌与直播体验。
-          - 问题反馈请前往Discussions：https://github.com/VTB-LINK/Metabox-Nexus-WesingCap/discussions
+          - 问题反馈请前往Discussions：${DOTCOM_DISCUSSIONS_URL}
           - API文档请前往：https://wesingcap.nexus.metabox.apifox.vtb.link
           EOF
 
@@ -164,9 +178,9 @@ jobs:
             cat auto-release-notes.md
           } > combined-release-notes.md
 
-          # 创建 Release Draft 并上传两个独立文件（exe + lyric html）
-          gh release create "${TAG_NAME}" "${EXE_NAME}" "lyric_display.html" \
-            --repo "VTB-LINK/Metabox-Nexus-WesingCap" \
+          # 创建 Release Draft 并上传 zip + 两个独立文件
+          gh release create "${TAG_NAME}" "${DOTCOM_ARCHIVE_NAME}" "${EXE_NAME}" "${HTML_FILE_NAME}" \
+            --repo "${DOTCOM_REPO}" \
             --title "${TAG_NAME}" \
             --draft \
             --notes-file combined-release-notes.md

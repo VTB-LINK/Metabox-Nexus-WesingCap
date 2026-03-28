@@ -13,6 +13,7 @@ jobs:
       GOOS: windows
       GOARCH: amd64
       OUTPUT_NAME: Metabox-Nexus-WesingCap
+      HTML_FILE_NAME: lyric_display.html
     
     steps:
       - name: Checkout code
@@ -74,13 +75,13 @@ jobs:
           BUILD_TIME=${{ steps.vars.outputs.BUILD_TIME }}
           
           # 创建临时目录用于打包
-          PACKAGE_DIR="Metabox-Nexus-WesingCap-${BUILD_TIME}-${COMMIT_HASH}"
+          PACKAGE_DIR="${OUTPUT_NAME}-${BUILD_TIME}-${COMMIT_HASH}"
           mkdir -p "${PACKAGE_DIR}"
           
           # 复制需要的文件
           cp "${EXE_NAME}" "${PACKAGE_DIR}/"
           cp config.yml "${PACKAGE_DIR}/"
-          cp lyric_display.html "${PACKAGE_DIR}/"
+          cp "${HTML_FILE_NAME}" "${PACKAGE_DIR}/"
           cp doc/API_RESPONSE_EXAMPLES.md "${PACKAGE_DIR}/"
           cp README.md "${PACKAGE_DIR}/" 2>/dev/null || true
           
@@ -93,7 +94,7 @@ jobs:
           BUILD_TIME=${{ steps.vars.outputs.BUILD_TIME }}
           
           # 创建zip压缩包
-          ARCHIVE_NAME="Metabox-Nexus-WesingCap-${BUILD_TIME}-${COMMIT_HASH}.zip"
+          ARCHIVE_NAME="${OUTPUT_NAME}-${BUILD_TIME}-${COMMIT_HASH}.zip"
           
           # 进入目录后压缩，这样zip内不会包含目录层级
           cd "${PACKAGE_DIR}"
@@ -113,14 +114,14 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: Metabox-Nexus-WesingCap-${{ steps.vars.outputs.BUILD_TIME }}-${{ steps.vars.outputs.COMMIT_HASH }}
-          path: Metabox-Nexus-WesingCap-${{ steps.vars.outputs.BUILD_TIME }}-${{ steps.vars.outputs.COMMIT_HASH }}.zip
+          name: ${{ env.OUTPUT_NAME }}-${{ steps.vars.outputs.BUILD_TIME }}-${{ steps.vars.outputs.COMMIT_HASH }}
+          path: ${{ env.OUTPUT_NAME }}-${{ steps.vars.outputs.BUILD_TIME }}-${{ steps.vars.outputs.COMMIT_HASH }}.zip
           retention-days: 30
       
       - name: List artifacts
         run: |
           echo "Build completed successfully!"
-          echo "Executable: Metabox-Nexus-WesingCap-${{ steps.vars.outputs.BUILD_TIME }}-${{ steps.vars.outputs.COMMIT_HASH }}.exe"
-          echo "Archive: Metabox-Nexus-WesingCap-${{ steps.vars.outputs.BUILD_TIME }}-${{ steps.vars.outputs.COMMIT_HASH }}.zip"
+          echo "Executable: ${OUTPUT_NAME}-${{ steps.vars.outputs.BUILD_TIME }}-${{ steps.vars.outputs.COMMIT_HASH }}.exe"
+          echo "Archive: ${OUTPUT_NAME}-${{ steps.vars.outputs.BUILD_TIME }}-${{ steps.vars.outputs.COMMIT_HASH }}.zip"
           echo "Commit: ${{ steps.vars.outputs.COMMIT_HASH }}"
           echo "Build Time: ${{ steps.vars.outputs.TIMESTAMP }}"
